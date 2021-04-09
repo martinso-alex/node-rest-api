@@ -37,10 +37,61 @@ class Atendimento {
         if (error) {
           res.status(400).json(error)
         } else {
-          res.status(201).json(output)
+          res.status(201).json(atendimento)
         }
       })
     }
+  }
+
+  lista (res) {
+    const sql = 'SELECT * FROM ATENDIMENTOS'
+
+    conexao.query(sql, (error, output) => {
+      if (error) {
+        res.status(400).json(error)
+      } else {
+        res.status(200).json(output)
+      }
+    })
+  }
+
+  busca_por_id (id, res) {
+    const sql = `SELECT * FROM ATENDIMENTOS WHERE ID=${id}`
+
+    conexao.query(sql, (error, output) => {
+      if (error) {
+        res.status(400).json(error)
+      } else {
+        const atendimento = output[0]
+        res.status(200).json(atendimento)
+      }
+    })
+  }
+
+  altera (id, valores, res) {
+    const sql = 'UPDATE ATENDIMENTOS SET ? WHERE ID=?'
+
+    if (valores.data) valores.data = moment(valores.data, 'DD/MM/YYYY').format('YYYY-MM-DD HH:MM:SS')
+
+    conexao.query(sql, [valores, id], (error, output) => {
+      if (error) {
+        res.status(400).json(error)
+      } else {
+        res.status(200).json({...valores, id})
+      }
+    })
+  }
+
+  deleta (id, res) {
+    const sql = 'DELETE FROM ATENDIMENTOS WHERE ID=?'
+
+    conexao.query(sql, id, (error, output) => {
+      if (error) {
+        res.status(400).json(error)
+      } else {
+        res.status(200).json({id})
+      }
+    })
   }
 }
 
