@@ -1,103 +1,78 @@
-const conexao = require('../configs/connection')
+const repositorio = require('../repositories/atendimentos')
+const conexao = require('../infra/database/connection')
 const moment = require('moment')
 const axios = require('axios')
 
 class Atendimento {
-  adiciona (atendimento, res) {
-    const data_criacao = moment().format('YYYY-MM-DD HH:MM:SS')
-    const data = moment(atendimento.data, 'DD/MM/YYYY').format('YYYY-MM-DD HH:MM:SS')
-    
-    const data_valida = moment(data).isSameOrAfter(data_criacao)
-    const cliente_valido = atendimento.cliente.length >= 5
+  constructor() {
+    this.data_valida = ({data, data_criacao}) => moment(data).isSameOrAfter(data_criacao)
+    this.cliente_valido = (cliente) => cliente.length >= 5
 
-    const validacoes = [
+    this.valida = params => this.validacoes.filter(campo => !campo.valido(params[campo.nome]))
+
+    this.validacoes = [
       {
         nome: 'data',
-        valido: data_valida,
+        valido: this.data_valida,
         mensagem: "Data deve ser maior ou igual a data atual"
       },
       {
         nome: 'cliente',
-        valido: cliente_valido,
+        valido: this.cliente_valido,
         mensagem: "Cliente deve ter pelo menos cinco caracteres"
       }
     ]
+  }
 
-    const erros = validacoes.filter(campo => !campo.valido)
-    const existem_erros = erros.length
+  adiciona (atendimento) {
+    const data_criacao = moment().format('YYYY-MM-DD HH:MM:SS')
+    const data = moment(atendimento.data, 'DD/MM/YYYY').format('YYYY-MM-DD HH:MM:SS')
+    
+    const params = {
+      data: {data, data_criacao},
+      cliente: atendimento.cliente
+    }
+
+    const erros = this.valida(params)
+    const existem_erros = erros.length  
 
     if (existem_erros) {
-      res.status(400).json(erros)
+      return Promise.reject(erros)
     } else {
       atendimento.data_criacao = data_criacao
       atendimento.data = data
       
-      const sql = 'INSERT INTO ATENDIMENTOS SET ?'
-
-      conexao.query(sql, atendimento, (error, output) => {
-        if (error) {
-          res.status(400).json(error)
-        } else {
-          res.status(201).json(atendimento)
-        }
-      })
+      return repositorio.adiciona(atendimento)
+        .then(res => {
+          const id = res.insertId
+          return {...atendimento, id}
+        })
     }
   }
 
-  lista (res) {
-    const sql = 'SELECT * FROM ATENDIMENTOS'
-
-    conexao.query(sql, (error, output) => {
-      if (error) {
-        res.status(400).json(error)
-      } else {
-        res.status(200).json(output)
-      }
-    })
+  lista () {
+    return repositorio.lista()
   }
 
-  busca_por_id (id, res) {
-    const sql = `SELECT * FROM ATENDIMENTOS WHERE ID=${id}`
-
-    conexao.query(sql, async (error, output) => {
-      if (error) {
-        res.status(400).json(error)
-      } else {
-        const atendimento = output[0]
+  busca_por_id (id) {
+    return repositorio.busca_por_id(id)
+      .then(async res => {
+        const atendimento = res[0]
         const cpf = atendimento.CLIENTE
         const { data } = await axios.get(`http://localhost:8082/${cpf}`)
-
         atendimento.CLIENTE = data
-
-        res.status(200).json(atendimento)
-      }
-    })
+        return atendimento
+      })
   }
 
-  altera (id, valores, res) {
-    const sql = 'UPDATE ATENDIMENTOS SET ? WHERE ID=?'
-
+  altera (id, valores) {
     if (valores.data) valores.data = moment(valores.data, 'DD/MM/YYYY').format('YYYY-MM-DD HH:MM:SS')
 
-    conexao.query(sql, [valores, id], (error, output) => {
-      if (error) {
-        res.status(400).json(error)
-      } else {
-        res.status(200).json({...valores, id})
-      }
-    })
+    return repositorio.altera(id, valores).then(() => ({...valores, id}))
   }
 
-  deleta (id, res) {
-    const sql = 'DELETE FROM ATENDIMENTOS WHERE ID=?'
-
-    conexao.query(sql, id, (error, output) => {
-      if (error) {
-        res.status(400).json(error)
-      } else {
-        res.status(200).json({id})
-      }
-    })
+  deleta (id) {
+    return repositorio.deleta(id).then(() => id)
   }
 }
 
